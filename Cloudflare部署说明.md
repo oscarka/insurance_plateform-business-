@@ -37,6 +37,7 @@ VITE_API_BASE_URL = https://your-backend.railway.app/api
    - **Build command**: `cd admin && npm install && npm run build`
    - **Build output directory**: `admin/dist`
    - **Root directory**: `/`（留空或填 `/`）
+   - **⚠️ 重要：部署命令（Deploy command）必须留空！** Cloudflare Pages 会自动部署构建产物，不需要 `wrangler deploy` 命令
 
 4. **环境变量**
    在 "Environment variables" 中添加：
@@ -93,6 +94,15 @@ VITE_API_BASE_URL = https://your-backend.railway.app/api
    ```
 
 ## 六、常见问题
+
+### Q: 构建失败，提示 "error occurred while running deploy command"？
+A: **这是最常见的错误！** 原因是在 Cloudflare Pages 配置中设置了 `npx wrangler deploy` 作为部署命令。
+   - **解决方法**：在 Cloudflare Pages 项目设置中，找到 "Deploy command"（部署命令）字段，**将其留空或删除**
+   - Cloudflare Pages 会自动部署 `Build output directory` 中生成的静态文件，不需要手动指定部署命令
+   - 正确的配置：
+     - ✅ Build command: `cd admin && npm install && npm run build`
+     - ✅ Build output directory: `admin/dist`
+     - ✅ Deploy command: **留空**
 
 ### Q: 构建失败？
 A: 检查：
