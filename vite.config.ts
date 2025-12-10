@@ -15,11 +15,16 @@ export default defineConfig(({ mode }) => {
         {
           name: 'copy-redirects',
           closeBundle() {
-            const fs = require('fs');
-            const distPath = path.resolve(__dirname, 'dist');
-            const redirectsPath = path.resolve(__dirname, '_redirects');
-            if (fs.existsSync(redirectsPath) && fs.existsSync(distPath)) {
-              fs.copyFileSync(redirectsPath, path.join(distPath, '_redirects'));
+            try {
+              const { existsSync, copyFileSync } = require('fs');
+              const distPath = path.resolve(__dirname, 'dist');
+              const redirectsPath = path.resolve(__dirname, '_redirects');
+              if (existsSync(redirectsPath) && existsSync(distPath)) {
+                copyFileSync(redirectsPath, path.join(distPath, '_redirects'));
+                console.log('✅ _redirects文件已复制到dist目录');
+              }
+            } catch (error) {
+              console.warn('⚠️ 复制_redirects文件失败:', error);
             }
           }
         }
