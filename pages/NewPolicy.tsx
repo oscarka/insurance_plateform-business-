@@ -14,6 +14,140 @@ import {
   X
 } from 'lucide-react';
 import { PlanConfig, CompanyInfo, Employee } from '../types';
+import PlanSelectionDynamic from '../src/components/PlanSelectionDynamic';
+import { getProvinces, getRegions } from '../src/services/api';
+import { useProductPlans } from '../src/hooks/useProductPlans';
+import OccupationCascader from '../src/components/OccupationCascader';
+
+// 地区级联选择器组件
+const RegionSelector = ({
+  companyInfo,
+  setCompanyInfo
+}: {
+  companyInfo: CompanyInfo;
+  setCompanyInfo: (c: CompanyInfo) => void;
+}) => {
+  const [provinces, setProvinces] = useState<Array<{region_id: number; region_code: string; region_name: string}>>([]);
+  const [cities, setCities] = useState<Array<{region_id: number; region_code: string; region_name: string}>>([]);
+  const [districts, setDistricts] = useState<Array<{region_id: number; region_code: string; region_name: string}>>([]);
+  const [loading, setLoading] = useState(false);
+
+  // 加载省份列表
+  useEffect(() => {
+    const loadProvinces = async () => {
+      try {
+        const data = await getProvinces();
+        setProvinces(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('加载省份失败:', error);
+      }
+    };
+    loadProvinces();
+  }, []);
+
+  // 当选择省份时，加载城市列表
+  useEffect(() => {
+    if (companyInfo.provinceId) {
+      const loadCities = async () => {
+        setLoading(true);
+        try {
+          const data = await getRegions({ level: 2, parent_id: companyInfo.provinceId });
+          setCities(Array.isArray(data) ? data : []);
+          setDistricts([]);
+          // 清空城市和区县选择
+          setCompanyInfo({...companyInfo, cityId: undefined, districtId: undefined, city: '', district: ''});
+        } catch (error) {
+          console.error('加载城市失败:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadCities();
+    } else {
+      setCities([]);
+      setDistricts([]);
+    }
+  }, [companyInfo.provinceId]);
+
+  // 当选择城市时，加载区县列表
+  useEffect(() => {
+    if (companyInfo.cityId) {
+      const loadDistricts = async () => {
+        setLoading(true);
+        try {
+          const data = await getRegions({ level: 3, parent_id: companyInfo.cityId });
+          setDistricts(Array.isArray(data) ? data : []);
+          // 清空区县选择
+          setCompanyInfo({...companyInfo, districtId: undefined, district: ''});
+        } catch (error) {
+          console.error('加载区县失败:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadDistricts();
+    } else {
+      setDistricts([]);
+    }
+  }, [companyInfo.cityId]);
+
+  return (
+    <div className="flex items-center col-span-1 md:col-span-2">
+      <label className="w-28 text-sm text-gray-600">企业所在地</label>
+      <div className="flex-1 flex gap-2">
+        <select 
+          className="flex-1 rounded border-gray-300 border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+          value={companyInfo.provinceId || ''}
+          onChange={e => {
+            const provinceId = e.target.value ? Number(e.target.value) : undefined;
+            const province = provinces.find(p => p.region_id === provinceId)?.region_name || '';
+            setCompanyInfo({...companyInfo, provinceId, province, cityId: undefined, city: '', districtId: undefined, district: ''});
+          }}
+          disabled={loading}
+        >
+          <option value="">请选择省份</option>
+          {provinces.map(p => (
+            <option key={p.region_id} value={p.region_id}>{p.region_name}</option>
+          ))}
+        </select>
+        {companyInfo.provinceId && (
+          <select 
+            className="flex-1 rounded border-gray-300 border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+            value={companyInfo.cityId || ''}
+            onChange={e => {
+              const cityId = e.target.value ? Number(e.target.value) : undefined;
+              const city = cities.find(c => c.region_id === cityId)?.region_name || '';
+              setCompanyInfo({...companyInfo, cityId, city, districtId: undefined, district: ''});
+            }}
+            disabled={loading}
+          >
+            <option value="">请选择城市</option>
+            {cities.map(c => (
+              <option key={c.region_id} value={c.region_id}>{c.region_name}</option>
+            ))}
+          </select>
+        )}
+        {companyInfo.cityId && (
+          <select 
+            className="flex-1 rounded border-gray-300 border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+            value={companyInfo.districtId || ''}
+            onChange={e => {
+              const districtId = e.target.value ? Number(e.target.value) : undefined;
+              const district = districts.find(d => d.region_id === districtId)?.region_name || '';
+              setCompanyInfo({...companyInfo, districtId, district});
+            }}
+            disabled={loading}
+          >
+            <option value="">请选择区县</option>
+            {districts.map(d => (
+              <option key={d.region_id} value={d.region_id}>{d.region_name}</option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // Steps Component
 const Steps = ({ current }: { current: number }) => {
@@ -156,6 +290,27 @@ const PlanSelection = ({
         <h3 className="text-base font-bold text-gray-800 mb-6">投保人信息</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
           <div className="flex items-center">
+            <label className="w-28 text-sm text-gray-600">投保类型</label>
+            <input 
+              type="text" 
+              className="flex-1 rounded border-gray-300 border px-3 py-2 text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+              value="新保"
+              disabled
+              readOnly
+            />
+          </div>
+          <div className="flex items-center">
+            <label className="w-32 text-sm text-gray-600">是否涉高</label>
+            <select 
+              className="flex-1 rounded border-gray-300 border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+              value={companyInfo.isHighRisk ? '是' : '否'}
+              onChange={e => setCompanyInfo({...companyInfo, isHighRisk: e.target.value === '是'})}
+            >
+              <option value="否">否</option>
+              <option value="是">是</option>
+            </select>
+          </div>
+          <div className="flex items-center">
             <label className="w-28 text-sm text-gray-600">投保企业名称</label>
             <input 
               type="text" 
@@ -175,29 +330,7 @@ const PlanSelection = ({
               onChange={e => setCompanyInfo({...companyInfo, creditCode: e.target.value})}
             />
           </div>
-          <div className="flex items-center">
-            <label className="w-28 text-sm text-gray-600">企业所在地</label>
-            <div className="flex-1 flex gap-2">
-               <select 
-                 className="w-full rounded border-gray-300 border px-3 py-2 text-sm text-gray-500"
-                 value={companyInfo.province}
-                 onChange={e => setCompanyInfo({...companyInfo, province: e.target.value})}
-               >
-                 <option value="">请选择企业所在地</option>
-                 <option value="beijing">北京市</option>
-               </select>
-               {companyInfo.province && (
-                 <select 
-                   className="w-full rounded border-gray-300 border px-3 py-2 text-sm text-gray-500"
-                   value={companyInfo.district}
-                   onChange={e => setCompanyInfo({...companyInfo, district: e.target.value})}
-                 >
-                   <option value="">请选择区县</option>
-                   <option value="tongzhou">通州区</option>
-                 </select>
-               )}
-            </div>
-          </div>
+          <RegionSelector companyInfo={companyInfo} setCompanyInfo={setCompanyInfo} />
         </div>
         <div className="mt-4 flex justify-end">
           <button className="px-6 py-1.5 border border-blue-400 text-blue-600 text-sm rounded hover:bg-blue-50 transition-colors">
@@ -303,7 +436,9 @@ const PlanSelection = ({
              </div>
              {plans.map((plan) => (
                <div key={plan.id} className="flex-1 p-4 min-w-[220px] border-l border-gray-100 flex items-center">
-                  <span className="text-blue-600 font-bold text-lg">¥{calculatePlanPrice(plan)}元</span>
+                  <span className="text-blue-600 font-bold text-lg">
+                    {plan.premiumPerPerson ? `¥${plan.premiumPerPerson}元` : `¥${calculatePlanPrice(plan)}元`}
+                  </span>
                </div>
              ))}
           </div>
@@ -406,6 +541,13 @@ const InfoFilling = ({
   setCompanyInfo,
   employees,
   setEmployees,
+  plans,
+  selectedProductId,
+  selectedPlanIds,
+  premiums,
+  effectiveDate,
+  setEffectiveDate,
+  commonDuration,
   onNext,
   onPrev
 }: {
@@ -413,10 +555,124 @@ const InfoFilling = ({
   setCompanyInfo: (c: CompanyInfo) => void,
   employees: Employee[],
   setEmployees: (e: Employee[]) => void,
+  plans: PlanConfig[],
+  selectedProductId: number | null,
+  selectedPlanIds: Record<string, number>,
+  premiums: Record<string, number>,
+  effectiveDate: string,
+  setEffectiveDate: (d: string) => void,
+  commonDuration: string,
   onNext: () => void,
   onPrev: () => void
 }) => {
   
+  // 当前选中的方案标签页
+  const [activePlanTab, setActivePlanTab] = useState<string>(plans[0]?.id || '');
+
+  // 使用useProductPlans获取责任信息和产品信息
+  const { planLiabilities, fetchPlanLiabilities, products } = useProductPlans(selectedProductId || undefined);
+  
+  // 获取当前选中的产品信息
+  const [productDetail, setProductDetail] = useState<any>(null);
+  
+  // 根据产品ID获取产品详情
+  useEffect(() => {
+    if (selectedProductId) {
+      // 先从products列表获取基本信息
+      const product = products.find(p => p.product_id === selectedProductId);
+      if (product) {
+        setProductDetail({
+          product_name: product.product_name,
+          company_name: product.company_name,
+          company_code: product.company_code,
+        });
+      }
+      
+      // 调用API获取详细产品信息（包含registration_name和registration_no）
+      import('../src/services/api').then(({ getProduct }) => {
+        getProduct(selectedProductId).then((response: any) => {
+          const detail = response?.data || response;
+          if (detail) {
+            setProductDetail({
+              product_name: detail.product_name || product?.product_name,
+              registration_name: detail.registration_name,
+              registration_no: detail.registration_no,
+              company_name: product?.company_name || detail.company_name,
+              company_code: product?.company_code || detail.company_code,
+            });
+          }
+        }).catch((err: any) => {
+          console.error('获取产品详情失败:', err);
+          // 如果API失败，至少使用列表中的基本信息
+          if (product) {
+            setProductDetail({
+              product_name: product.product_name,
+              company_name: product.company_name,
+              company_code: product.company_code,
+            });
+          }
+        });
+      });
+    } else {
+      setProductDetail(null);
+    }
+  }, [selectedProductId, products]);
+  
+  // 根据产品ID获取保险公司ID
+  const companyId = selectedProductId 
+    ? products.find(p => p.product_id === selectedProductId)?.company_id 
+    : undefined;
+  
+  // 计算终止日期（根据生效日期和保障期限）
+  const calculateTerminationDate = (effDate: string, duration: string): string => {
+    if (!effDate) return '';
+    
+    const eff = new Date(effDate);
+    if (isNaN(eff.getTime())) return '';
+    
+    const term = new Date(eff);
+    
+    if (duration.includes('年')) {
+      const years = parseInt(duration.match(/\d+/)?.[0] || '1');
+      term.setFullYear(term.getFullYear() + years);
+      term.setDate(term.getDate() - 1); // 终止日期是生效日期+保障期限-1天
+    } else if (duration.includes('个月') || duration.includes('月')) {
+      const months = parseInt(duration.match(/\d+/)?.[0] || '1');
+      term.setMonth(term.getMonth() + months);
+      term.setDate(term.getDate() - 1);
+    }
+    
+    return term.toISOString().split('T')[0];
+  };
+  
+  const terminationDate = effectiveDate ? calculateTerminationDate(effectiveDate, commonDuration) : '';
+  
+  // 初始化生效日期（如果没有设置，默认为今天）
+  useEffect(() => {
+    if (!effectiveDate) {
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      setEffectiveDate(todayStr);
+    }
+  }, []);
+
+  // 当plans变化时，更新activePlanTab，并加载责任信息
+  useEffect(() => {
+    if (plans.length > 0 && (!activePlanTab || !plans.find(p => p.id === activePlanTab))) {
+      setActivePlanTab(plans[0].id);
+    }
+  }, [plans.length]);
+
+  // 加载所有方案的责任信息
+  useEffect(() => {
+    plans.forEach((plan) => {
+      const planId = selectedPlanIds[plan.id];
+      if (planId && !planLiabilities[planId]) {
+        fetchPlanLiabilities(planId);
+      }
+    });
+  }, [plans, selectedPlanIds]);
+
   const addEmployee = () => {
     const newEmp: Employee = {
       id: Date.now().toString(),
@@ -425,17 +681,97 @@ const InfoFilling = ({
       idNumber: '',
       gender: '男',
       jobCode: '00714035',
-      jobCategory: '5类'
+      jobCategory: '5类',
+      isHighWork: false,
+      planId: activePlanTab // 自动关联到当前选中的方案
     };
     setEmployees([...employees, newEmp]);
   };
 
-  const updateEmployee = (id: string, field: keyof Employee, value: string) => {
+  const updateEmployee = (id: string, field: keyof Employee, value: string | boolean) => {
     setEmployees(employees.map(e => e.id === id ? { ...e, [field]: value } : e));
   };
 
+  // 下载投保模版
+  const handleDownloadTemplate = () => {
+    // 创建Excel模版数据
+    const templateData = [
+      ['姓名', '证件类型', '证件号码', '性别', '出生日期', '职业代码', '职业类别', '是否涉及高处作业', '职务/工种描述', '国籍', '月工资币别', '月工资金额', '赔偿月数', '用工单位', '用工地点', '是否参保工伤保险', '备注']
+    ];
+    
+    // 转换为CSV格式（简单实现，实际可以使用xlsx库）
+    const csvContent = templateData.map(row => row.join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', '人员清单导入模版.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 计算总保费
+  const totalPremium = plans.reduce((sum, plan) => {
+    return sum + (plan.totalPremium || 0);
+  }, 0);
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 space-y-8">
+      {/* Product Info Section */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-base font-bold text-gray-800 mb-4 border-l-4 border-transparent pl-0">保险信息</h3>
+        <div className="pl-0">
+          <div className="grid grid-cols-12 gap-4 mb-2">
+            <div className="col-span-1 text-gray-500 text-sm pt-1">产品名称</div>
+            <div className="col-span-11">
+              {productDetail ? (
+                <>
+                  <span className="font-medium text-gray-800">{productDetail.product_name}</span>
+                  {productDetail.registration_name && (
+                    <div className="mt-2 bg-gray-50 p-3 rounded text-xs text-gray-500 space-y-1 inline-block pr-12">
+                      <p>备案名: {productDetail.registration_name}</p>
+                      {productDetail.registration_no && (
+                        <p>注册号: {productDetail.registration_no}</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-400">请先选择产品</span>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-12 gap-4 mt-4">
+            <div className="col-span-1 text-gray-500 text-sm pt-1">生效日期</div>
+            <div className="col-span-5">
+              <input
+                type="date"
+                value={effectiveDate}
+                onChange={(e) => setEffectiveDate(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div className="col-span-1 text-gray-500 text-sm pt-1">终止日期</div>
+            <div className="col-span-5">
+              <span className="text-sm text-gray-800">
+                {terminationDate || '请先选择生效日期'}
+              </span>
+            </div>
+          </div>
+          {totalPremium > 0 && (
+            <div className="grid grid-cols-12 gap-4 mt-4">
+              <div className="col-span-1 text-gray-500 text-sm pt-1">总保费</div>
+              <div className="col-span-11">
+                <span className="text-2xl font-bold text-blue-600">¥{totalPremium}元</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Company Info - Detailed for Step 2 */}
       <div>
         <h3 className="text-base font-bold text-gray-800 mb-6">投保人信息</h3>
@@ -506,33 +842,127 @@ const InfoFilling = ({
         </div>
       </div>
 
-      {/* Employee Info */}
+      {/* 投保方案 - 标签页显示 */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-base font-bold text-gray-800 mb-4">投保方案</h3>
+        
+        {/* 提示信息 */}
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-4 text-xs text-gray-600">
+          此处"每人保费"为普通职业保费, 部分职业涉及加费承保, 请以被保人信息录入页"每人保费"金额为准, 更多加费职业信息可通过产品资料职业表查询
+        </div>
+
+        {/* 方案标签页 */}
+        <div className="border-b border-gray-200 mb-4">
+          <div className="flex space-x-1">
+            {plans.map((plan) => (
+              <button
+                key={plan.id}
+                onClick={() => setActivePlanTab(plan.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activePlanTab === plan.id
+                    ? 'border-blue-500 text-blue-600 bg-blue-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {plan.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 当前选中方案的详细信息 */}
+        {(() => {
+          const currentPlan = plans.find(p => p.id === activePlanTab);
+          if (!currentPlan) return null;
+          
+          const planId = selectedPlanIds[currentPlan.id];
+          const liabilities = planId ? planLiabilities[planId] || [] : [];
+          
+          // 根据liabilitySelections和planLiabilities动态显示责任信息
+          const getLiabilityDisplay = (liabilityName: string) => {
+            const liability = liabilities.find(l => l.liability_name === liabilityName);
+            if (!liability) return '-';
+            
+            const selectedValue = currentPlan.liabilitySelections?.[liability.liability_id];
+            if (!selectedValue) return '-';
+            
+            return `${selectedValue}${liability.unit || ''}`;
+          };
+          
+          return (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                {/* 动态显示所有责任 */}
+                {liabilities.length > 0 ? (
+                  liabilities
+                    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                    .map((liability) => {
+                      const selectedValue = currentPlan.liabilitySelections?.[liability.liability_id];
+                      const displayValue = selectedValue 
+                        ? `${selectedValue}${liability.unit || ''}` 
+                        : '-';
+                      
+                      return (
+                        <div key={liability.liability_id}>
+                          <span className="text-gray-600">{liability.liability_name}：</span>
+                          <span className="font-semibold text-gray-800 ml-2">{displayValue}</span>
+                        </div>
+                      );
+                    })
+                ) : planId ? (
+                  <div className="col-span-3 text-gray-400 text-sm">正在加载责任配置...</div>
+                ) : (
+                  <div className="col-span-3 text-gray-400 text-sm">请先选择方案</div>
+                )}
+                
+                {/* 固定显示的信息 */}
+                <div>
+                  <span className="text-gray-600">保障时间：</span>
+                  <span className="font-semibold text-gray-800 ml-2">{currentPlan.duration || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">职业类别：</span>
+                  <span className="font-semibold text-gray-800 ml-2">{currentPlan.jobClass || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">每人保费：</span>
+                  <span className="font-semibold text-blue-600 ml-2">
+                    {currentPlan.premiumPerPerson ? `¥${currentPlan.premiumPerPerson}元` : '-'}
+                    {currentPlan.duration && (
+                      <span className="text-xs text-gray-500 ml-1">(保障期限:{currentPlan.duration})</span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* 被保人信息 */}
       <div>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-base font-bold text-gray-800">保险信息</h3>
-        </div>
-         {/* Simplified Policy Summary for Step 2 context */}
-        <div className="bg-gray-50 p-4 rounded text-sm text-gray-600 mb-6 flex justify-between items-center">
-            <div>
-               <p className="font-bold text-gray-800 mb-1">Enterprise Liability Insurance (Classic Edition)</p>
-               <p className="text-xs">生效日期：2025-12-07 终止日期：2026-12-06</p>
-            </div>
-            <div className="text-right">
-                <p className="text-blue-600 font-bold text-lg">¥1245.8元</p>
-            </div>
-        </div>
-
-
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-base font-bold text-gray-800">被保人信息</h3>
           <div className="flex gap-2">
-            <button className="text-gray-600 text-sm border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 bg-white">
+            <button 
+              onClick={handleDownloadTemplate}
+              className="text-gray-600 text-sm border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 bg-white"
+            >
               <Download size={14} /> 下载投保模版
             </button>
             <button className="text-gray-600 text-sm border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 bg-white">
               <Upload size={14} /> 批量导入被保人
             </button>
-             <button onClick={() => setEmployees([])} className="text-gray-600 text-sm border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 bg-white">
+             <button 
+              onClick={() => {
+                // 只删除当前方案下的被保人
+                const currentPlanEmployees = employees.filter(e => e.planId === activePlanTab);
+                const selectedIds = new Set(); // TODO: 实现选中状态管理
+                const toDelete = currentPlanEmployees.filter(e => selectedIds.has(e.id));
+                setEmployees(employees.filter(e => !toDelete.includes(e)));
+              }} 
+              className="text-gray-600 text-sm border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 bg-white"
+            >
               <Trash2 size={14} /> 删除选中
             </button>
              <button onClick={addEmployee} className="text-gray-600 text-sm border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 bg-white">
@@ -542,14 +972,28 @@ const InfoFilling = ({
         </div>
         
         <div className="mb-4">
-            <div className="relative">
-                <input 
-                  type="text" 
-                  className="w-full border border-gray-300 rounded pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-blue-500" 
-                  placeholder="请选择要查询的职业"
-                />
-                <ChevronDown className="absolute right-3 top-2.5 text-gray-400 h-4 w-4"/>
-            </div>
+            <p className="text-sm text-gray-600 mb-2">请于下方选择雇员职业查询职业代码</p>
+            <OccupationCascader
+              placeholder="请选择要查询的职业"
+              productId={selectedProductId || undefined}
+              onChange={(occupation) => {
+                if (occupation) {
+                  // 更新当前方案下所有被保人的职业信息
+                  const currentPlanEmployees = employees.filter(e => e.planId === activePlanTab);
+                  const updatedEmployees = employees.map(emp => {
+                    if (currentPlanEmployees.includes(emp)) {
+                      return {
+                        ...emp,
+                        jobCode: occupation.detailCode,
+                        jobCategory: `${occupation.occupationLevel}类`,
+                      };
+                    }
+                    return emp;
+                  });
+                  setEmployees(updatedEmployees);
+                }
+              }}
+            />
         </div>
 
         <div className="overflow-x-auto rounded-t-lg border-t border-l border-r border-gray-200">
@@ -566,19 +1010,26 @@ const InfoFilling = ({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 font-bold">出生日期</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 font-bold">职业代码</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 font-bold">职业类别</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 font-bold">是否涉及高处作业</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 font-bold">每人保费</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 font-bold">方案</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {employees.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-gray-400 text-sm">
-                    暂无被保人信息，请添加或导入
-                  </td>
-                </tr>
-              ) : (
-                employees.map((emp) => (
+              {(() => {
+                // 只显示当前选中方案下的被保人
+                const currentPlanEmployees = employees.filter(e => e.planId === activePlanTab);
+                
+                if (currentPlanEmployees.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={10} className="px-4 py-12 text-center text-gray-400 text-sm">
+                        暂无被保人信息，请添加或导入
+                      </td>
+                    </tr>
+                  );
+                }
+                
+                return currentPlanEmployees.map((emp) => (
                   <tr key={emp.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                        <input type="checkbox" className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"/>
@@ -623,16 +1074,40 @@ const InfoFilling = ({
                       />
                     </td>
                     <td className="px-4 py-3 text-sm text-center">5类</td>
-                    <td className="px-4 py-3 text-sm">291.2元</td>
-                    <td className="px-4 py-3 text-sm">方案一</td>
+                    <td className="px-4 py-3">
+                      <select 
+                        value={emp.isHighWork ? '是' : '否'}
+                        onChange={(e) => updateEmployee(emp.id, 'isHighWork', e.target.value === '是')}
+                        className="w-20 border-gray-300 border rounded px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="否">否</option>
+                        <option value="是">是</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className="text-blue-600 font-bold">
+                        {(() => {
+                          // 当前被保人关联的方案（应该是当前activePlanTab）
+                          const empPlan = plans.find(p => p.id === activePlanTab);
+                          if (empPlan) {
+                            // 优先使用plan中的premiumPerPerson，否则使用premiums中的值
+                            const planPremium = empPlan.premiumPerPerson || premiums[empPlan.id];
+                            if (planPremium) {
+                              return `¥${planPremium}元`;
+                            }
+                          }
+                          return '—';
+                        })()}
+                      </span>
+                    </td>
                   </tr>
                 ))
-              )}
+              })()}
             </tbody>
           </table>
         </div>
          <div className="bg-gray-50 p-4 border border-t-0 border-gray-200 rounded-b-lg text-xs text-gray-500">
-             <p>一共{employees.length}名被保人，已选中0位</p>
+             <p>一共{employees.filter(e => e.planId === activePlanTab).length}名被保人（{plans.find(p => p.id === activePlanTab)?.name || '当前方案'}），已选中0位</p>
              <p className="mt-1">请注意被保人职业类别，如果职业类别高于投保方案时选择的职业类别，可能导致无法投保，请返回修改投保方案</p>
              <p>职业类别属于重要告知内容，投保人务必如实填写，如一人同时涉及多个岗位的，则以职业类别最高的岗位申报；如果申报的职业与实际不一致的，后续可能导致无法理赔</p>
          </div>
@@ -700,9 +1175,28 @@ const Confirmation = ({
                 <div>身故赔偿: {plan.deathBenefit}</div>
                 <div>医疗赔偿: {plan.medicalBenefit}</div>
                 <div>被保人数: {plan.insuredCount || 0}人</div>
+                {plan.premiumPerPerson && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <div className="text-blue-600 font-semibold">每人保费: ¥{plan.premiumPerPerson}元</div>
+                    {plan.totalPremium && (
+                      <div className="text-blue-600 font-semibold">总保费: ¥{plan.totalPremium}元</div>
+                    )}
+                  </div>
+                )}
              </div>
            ))}
          </div>
+         {/* 显示总保费 */}
+         {(() => {
+           const totalPremium = plans.reduce((sum, plan) => sum + (plan.totalPremium || 0), 0);
+           return totalPremium > 0 ? (
+             <div className="mt-4 pt-4 border-t border-gray-200">
+               <div className="text-right">
+                 <span className="text-lg font-bold text-blue-600">合计支付保费: ¥{totalPremium}元</span>
+               </div>
+             </div>
+           ) : null;
+         })()}
       </div>
 
       <div className="border border-gray-200 rounded-lg p-4">
@@ -844,34 +1338,52 @@ const NewPolicy: React.FC = () => {
   });
 
   const [employees, setEmployees] = useState<Employee[]>([]);
+  
+  // 保费信息状态（用于在页面间传递）
+  const [premiums, setPremiums] = useState<Record<string, number>>({});
+  
+  // PlanSelectionDynamic 的内部状态（用于保持选择状态）
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Record<string, number>>({});
+  const [commonDuration, setCommonDuration] = useState<string>('1年'); // 统一的保障期限
+  const [effectiveDate, setEffectiveDate] = useState<string>(''); // 生效日期
 
   // Pre-fill a sample employee for demo when reaching step 2
   useEffect(() => {
-     if (currentStep === 2 && employees.length === 0) {
-        setEmployees([
-           {
-             id: '1',
-             name: '张三',
-             idType: '身份证',
-             idNumber: '110101199001011234',
-             gender: '男',
-             jobCode: '00714035',
-             jobCategory: '5类'
-           }
-        ]);
+     if (currentStep === 2 && employees.length === 0 && plans.length > 0) {
+        // 为每个方案创建一个示例被保人
+        const sampleEmployees: Employee[] = plans.map((plan, index) => ({
+          id: `sample-${plan.id}`,
+          name: index === 0 ? '张三' : '',
+          idType: '身份证',
+          idNumber: index === 0 ? '110101199001011234' : '',
+          gender: '男',
+          jobCode: '00714035',
+          jobCategory: plan.jobClass || '5类',
+          planId: plan.id // 关联到对应的方案
+        }));
+        setEmployees(sampleEmployees);
      }
-  }, [currentStep]);
+  }, [currentStep, plans.length]);
 
   return (
     <div className="max-w-6xl mx-auto pb-20">
       <Steps current={currentStep} />
       
       {currentStep === 1 && (
-        <PlanSelection 
+        <PlanSelectionDynamic 
           plans={plans} 
           setPlans={setPlans} 
           companyInfo={companyInfo}
           setCompanyInfo={setCompanyInfo}
+          premiums={premiums}
+          setPremiums={setPremiums}
+          selectedProductId={selectedProductId}
+          setSelectedProductId={setSelectedProductId}
+          selectedPlanIds={selectedPlanIds}
+          setSelectedPlanIds={setSelectedPlanIds}
+          commonDuration={commonDuration}
+          setCommonDuration={setCommonDuration}
           onNext={() => setCurrentStep(2)} 
         />
       )}
@@ -882,6 +1394,13 @@ const NewPolicy: React.FC = () => {
           setCompanyInfo={setCompanyInfo}
           employees={employees}
           setEmployees={setEmployees}
+          plans={plans}
+          selectedProductId={selectedProductId}
+          selectedPlanIds={selectedPlanIds}
+          premiums={premiums}
+          effectiveDate={effectiveDate}
+          setEffectiveDate={setEffectiveDate}
+          commonDuration={commonDuration}
           onNext={() => setCurrentStep(3)}
           onPrev={() => setCurrentStep(1)}
         />

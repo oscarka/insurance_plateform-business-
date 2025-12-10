@@ -23,6 +23,3 @@ dist-ssr
 *.sln
 *.sw?
 
-# Excel files (配置数据文件，不提交到git)
-*.xlsx
-!**/node_modules/**/*.xlsx
