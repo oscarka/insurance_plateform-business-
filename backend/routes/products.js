@@ -382,20 +382,27 @@ router.get('/:id/intercept-rules', async (req, res) => {
     
     const product = productRows[0];
     
-    // 获取拦截规则
-    const [configRows] = await connection.execute(
-      `SELECT intercept_rules_json FROM insurance_api_configs 
-       WHERE company_id = ? AND channel_code = 'LEXUAN' AND status = '启用'
-       ORDER BY updated_at DESC LIMIT 1`,
-      [product.insurance_company_id]
-    );
-    
+    // 获取拦截规则（如果产品有对应的保险公司ID）
     let interceptRules = {};
-    if (configRows.length > 0 && configRows[0].intercept_rules_json) {
+    if (product.insurance_company_id) {
       try {
-        interceptRules = JSON.parse(configRows[0].intercept_rules_json);
+        const [configRows] = await connection.execute(
+          `SELECT intercept_rules_json FROM insurance_api_configs 
+           WHERE company_id = ? AND channel_code = 'LEXUAN' AND status = '启用'
+           ORDER BY updated_at DESC LIMIT 1`,
+          [product.insurance_company_id]
+        );
+        
+        if (configRows.length > 0 && configRows[0].intercept_rules_json) {
+          try {
+            interceptRules = JSON.parse(configRows[0].intercept_rules_json);
+          } catch (e) {
+            console.error('解析拦截规则失败:', e);
+          }
+        }
       } catch (e) {
-        console.error('解析拦截规则失败:', e);
+        console.error('查询拦截规则失败:', e);
+        // 如果查询失败，返回空对象，不中断流程
       }
     }
     
@@ -412,6 +419,184 @@ router.get('/:id/intercept-rules', async (req, res) => {
     });
   } finally {
     connection.release();
+  }
+});
+
+/**
+ * GET /api/products/intercept-rules/list
+ * 获取所有拦截规则列表（用于管理页面展示）
+ */
+router.get('/intercept-rules/list', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // 获取所有配置，包含拦截规则
+    const [configRows] = await connection.execute(
+      `SELECT 
+        iac.config_id,
+        iac.company_id,
+        iac.company_code,
+        iac.intercept_rules_json,
+        iac.status as config_status,
+        ic.company_name as insurance_company_name
+      FROM insurance_api_configs iac
+      INNER JOIN insurance_companies ic ON iac.company_id = ic.company_id
+      WHERE iac.status = '启用' AND iac.intercept_rules_json IS NOT NULL
+      ORDER BY iac.updated_at DESC`
+    );
+    
+    const rules = [];
+    
+    // 解析每个配置的拦截规则
+    for (const config of configRows) {
+      if (!config.intercept_rules_json) continue;
+      
+      try {
+        const interceptRules = JSON.parse(config.intercept_rules_json);
+        const companyCode = config.company_code;
+        const companyName = config.insurance_company_name;
+        
+        // 获取该保司的所有产品
+        const [productRows] = await connection.execute(
+          `SELECT product_id, product_code, product_name 
+           FROM insurance_products 
+           WHERE company_id = ? AND status = '启用'`,
+          [config.company_id]
+        );
+        
+        // 为每个规则类型创建规则记录
+        let ruleId = 1;
+        
+        // 地区限制规则
+        if (interceptRules.region_restriction) {
+          const rule = interceptRules.region_restriction;
+          const deniedRegions = rule.denied_regions || [];
+          for (const product of productRows) {
+            rules.push({
+              rule_id: `${config.config_id}_region_${product.product_id}`,
+              rule_name: '地区限制规则',
+              rule_type: '地区限制',
+              insurance_company_code: companyCode,
+              insurance_company_name: companyName,
+              product_code: product.product_code,
+              product_name: product.product_name,
+              condition_type: '地区',
+              condition_value: deniedRegions.join('、'),
+              action: '拦截',
+              priority: 1,
+              status: config.config_status,
+              description: rule.description || `拒保地区：${deniedRegions.join('、')}`,
+            });
+          }
+        }
+        
+        // 年龄限制规则
+        if (interceptRules.age_restriction) {
+          const rule = interceptRules.age_restriction;
+          for (const product of productRows) {
+            rules.push({
+              rule_id: `${config.config_id}_age_${product.product_id}`,
+              rule_name: '年龄限制规则',
+              rule_type: '年龄限制',
+              insurance_company_code: companyCode,
+              insurance_company_name: companyName,
+              product_code: product.product_code,
+              product_name: product.product_name,
+              condition_type: '年龄',
+              condition_value: `${rule.min_age || 16}-${rule.max_age || 65}岁`,
+              action: '拦截',
+              priority: 2,
+              status: config.config_status,
+              description: rule.description || `雇员年龄：${rule.min_age || 16}周岁至${rule.max_age || 65}周岁（含）`,
+            });
+          }
+        }
+        
+        // 最低在保人数规则
+        if (interceptRules.min_insured_count) {
+          const rule = interceptRules.min_insured_count;
+          for (const product of productRows) {
+            rules.push({
+              rule_id: `${config.config_id}_min_count_${product.product_id}`,
+              rule_name: '最低在保人数规则',
+              rule_type: '人数限制',
+              insurance_company_code: companyCode,
+              insurance_company_name: companyName,
+              product_code: product.product_code,
+              product_name: product.product_name,
+              condition_type: '人数',
+              condition_value: `${rule.min_count || 3}人（含）以上`,
+              action: '拦截',
+              priority: 3,
+              status: config.config_status,
+              description: rule.description || `最低在保人数：${rule.min_count || 3}人（含）以上`,
+            });
+          }
+        }
+        
+        // 重复投保校验规则
+        if (interceptRules.duplicate_application_check) {
+          const rule = interceptRules.duplicate_application_check;
+          for (const product of productRows) {
+            rules.push({
+              rule_id: `${config.config_id}_duplicate_${product.product_id}`,
+              rule_name: '重复投保校验规则',
+              rule_type: '重复投保',
+              insurance_company_code: companyCode,
+              insurance_company_name: companyName,
+              product_code: product.product_code,
+              product_name: product.product_name,
+              condition_type: '重复投保',
+              condition_value: rule.check_scope === 'platform_only' ? '仅校验本平台' : '全平台',
+              action: '拦截',
+              priority: 4,
+              status: config.config_status,
+              description: rule.description || '重复投保校验（仅校验本平台数据库）',
+            });
+          }
+        }
+        
+        // 投保份数限制规则
+        if (interceptRules.policy_limit_check) {
+          const rule = interceptRules.policy_limit_check;
+          for (const product of productRows) {
+            rules.push({
+              rule_id: `${config.config_id}_policy_limit_${product.product_id}`,
+              rule_name: '投保份数限制规则',
+              rule_type: '投保份数',
+              insurance_company_code: companyCode,
+              insurance_company_name: companyName,
+              product_code: product.product_code,
+              product_name: product.product_name,
+              condition_type: '投保份数',
+              condition_value: `限${rule.max_policies_per_employee || 1}份`,
+              action: '拦截',
+              priority: 5,
+              status: config.config_status,
+              description: rule.description || `投保份数限制：相同雇员限${rule.max_policies_per_employee || 1}份（仅校验本平台数据库）`,
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`解析配置 ${config.config_id} 的拦截规则失败:`, e);
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: rules,
+      count: rules.length,
+    });
+  } catch (error) {
+    console.error('获取拦截规则列表失败:', error);
+    res.status(500).json({
+      success: false,
+      error: '获取拦截规则列表失败',
+      message: error.message,
+    });
+  } finally {
+    if (connection) connection.release();
   }
 });
 

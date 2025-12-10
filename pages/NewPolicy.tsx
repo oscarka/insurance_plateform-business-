@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { PlanConfig, CompanyInfo, Employee } from '../types';
 import PlanSelectionDynamic from '../src/components/PlanSelectionDynamic';
-import { getProvinces, getRegions } from '../src/services/api';
+import { getProvinces, getRegions, saveDraft } from '../src/services/api';
 import { useProductPlans } from '../src/hooks/useProductPlans';
 import OccupationCascader from '../src/components/OccupationCascader';
 
@@ -1118,7 +1118,56 @@ const InfoFilling = ({
           上一步
         </button>
         <div className="flex gap-4">
-           <button className="px-8 py-2 bg-white border border-blue-400 text-blue-600 rounded shadow-sm hover:bg-blue-50 text-sm flex items-center gap-1">
+           <button 
+            onClick={async () => {
+              if (!selectedProductId) {
+                alert('请先选择产品');
+                return;
+              }
+              
+              if (!companyInfo.name || !companyInfo.creditCode) {
+                alert('请先填写投保企业信息');
+                return;
+              }
+              
+              try {
+                // 转换companyInfo字段名为后端期望的格式
+                const company_info = {
+                  name: companyInfo.name || '',
+                  credit_code: companyInfo.creditCode || '',
+                  province: companyInfo.province || '',
+                  city: companyInfo.city || '',
+                  district: companyInfo.district || '',
+                  province_id: companyInfo.provinceId || null,
+                  city_id: companyInfo.cityId || null,
+                  district_id: companyInfo.districtId || null,
+                  address: companyInfo.address || '',
+                  contact_name: companyInfo.contactName || '',
+                  contact_phone: companyInfo.contactPhone || '',
+                  contact_email: companyInfo.contactEmail || '',
+                  industry: companyInfo.industry || '',
+                };
+                
+                const result = await saveDraft({
+                  company_info: company_info,
+                  product_id: selectedProductId,
+                  plans: plans,
+                  employees: employees,
+                  effective_date: effectiveDate,
+                  expiry_date: terminationDate,
+                  common_duration: commonDuration,
+                  selected_plan_ids: selectedPlanIds,
+                  premiums: premiums,
+                });
+                
+                alert(result.message || '保单已缓存成功');
+              } catch (error: any) {
+                console.error('缓存失败:', error);
+                alert('缓存失败: ' + (error.message || '未知错误'));
+              }
+            }}
+            className="px-8 py-2 bg-white border border-blue-400 text-blue-600 rounded shadow-sm hover:bg-blue-50 text-sm flex items-center gap-1"
+          >
             <FileText size={14}/> 缓存此保单
           </button>
           <button onClick={onNext} className="px-8 py-2 bg-blue-500 text-white rounded shadow-md hover:bg-blue-600 transition-colors text-sm">
@@ -1347,6 +1396,150 @@ const NewPolicy: React.FC = () => {
   const [selectedPlanIds, setSelectedPlanIds] = useState<Record<string, number>>({});
   const [commonDuration, setCommonDuration] = useState<string>('1年'); // 统一的保障期限
   const [effectiveDate, setEffectiveDate] = useState<string>(''); // 生效日期
+
+  // 恢复草稿数据
+  useEffect(() => {
+    const restoreDraftStr = localStorage.getItem('restoreDraft');
+    if (restoreDraftStr) {
+      try {
+        const draftData = JSON.parse(restoreDraftStr);
+        console.log('恢复草稿数据:', draftData);
+        
+        // 恢复企业信息（需要转换字段名从下划线到驼峰）
+        if (draftData.company_info) {
+          const ci = draftData.company_info;
+          
+          // 如果地区ID不存在，尝试根据地区名称查找ID
+          const restoreRegionIds = async () => {
+            let provinceId = ci.province_id;
+            let cityId = ci.city_id;
+            let districtId = ci.district_id;
+            
+            // 如果省份ID不存在但省份名称存在，查找省份ID
+            if (!provinceId && ci.province) {
+              try {
+                const provinces = await getProvinces();
+                const province = provinces.find((p: any) => p.region_name === ci.province);
+                if (province) {
+                  provinceId = province.region_id;
+                }
+              } catch (e) {
+                console.error('查找省份ID失败:', e);
+              }
+            }
+            
+            // 如果城市ID不存在但城市名称存在，查找城市ID
+            if (!cityId && ci.city && provinceId) {
+              try {
+                const cities = await getRegions({ level: '2', parent_id: provinceId });
+                const city = cities.find((c: any) => c.region_name === ci.city);
+                if (city) {
+                  cityId = city.region_id;
+                }
+              } catch (e) {
+                console.error('查找城市ID失败:', e);
+              }
+            }
+            
+            // 如果区县ID不存在但区县名称存在，查找区县ID
+            if (!districtId && ci.district && cityId) {
+              try {
+                const districts = await getRegions({ level: '3', parent_id: cityId });
+                const district = districts.find((d: any) => d.region_name === ci.district);
+                if (district) {
+                  districtId = district.region_id;
+                }
+              } catch (e) {
+                console.error('查找区县ID失败:', e);
+              }
+            }
+            
+            // 更新企业信息，包含查找后的ID
+            setCompanyInfo({
+              name: ci.name || '',
+              creditCode: ci.credit_code || '',
+              province: ci.province || '',
+              city: ci.city || '',
+              district: ci.district || '',
+              address: ci.address || '',
+              contactName: ci.contact_name || '',
+              contactPhone: ci.contact_phone || '',
+              contactEmail: ci.contact_email || '',
+              industry: ci.industry || '',
+              provinceId: provinceId,
+              cityId: cityId,
+              districtId: districtId,
+            });
+          };
+          
+          // 如果ID都存在，直接设置；否则异步查找
+          if (ci.province_id && ci.city_id && ci.district_id) {
+            setCompanyInfo({
+              name: ci.name || '',
+              creditCode: ci.credit_code || '',
+              province: ci.province || '',
+              city: ci.city || '',
+              district: ci.district || '',
+              address: ci.address || '',
+              contactName: ci.contact_name || '',
+              contactPhone: ci.contact_phone || '',
+              contactEmail: ci.contact_email || '',
+              industry: ci.industry || '',
+              provinceId: ci.province_id,
+              cityId: ci.city_id,
+              districtId: ci.district_id,
+            });
+          } else {
+            restoreRegionIds();
+          }
+        }
+        
+        // 恢复产品ID
+        if (draftData.product_id) {
+          setSelectedProductId(draftData.product_id);
+        }
+        
+        // 恢复方案
+        if (draftData.plans && Array.isArray(draftData.plans)) {
+          setPlans(draftData.plans);
+        }
+        
+        // 恢复被保人
+        if (draftData.employees && Array.isArray(draftData.employees)) {
+          setEmployees(draftData.employees);
+        }
+        
+        // 恢复保障期限
+        if (draftData.common_duration) {
+          setCommonDuration(draftData.common_duration);
+        }
+        
+        // 恢复生效日期
+        if (draftData.effective_date) {
+          setEffectiveDate(draftData.effective_date);
+        }
+        
+        // 恢复方案ID映射
+        if (draftData.selected_plan_ids) {
+          setSelectedPlanIds(draftData.selected_plan_ids);
+        }
+        
+        // 恢复保费信息
+        if (draftData.premiums) {
+          setPremiums(draftData.premiums);
+        }
+        
+        // 清除恢复标记
+        localStorage.removeItem('restoreDraft');
+        
+        // 跳转到第一步
+        setCurrentStep(1);
+      } catch (error) {
+        console.error('恢复草稿数据失败:', error);
+        localStorage.removeItem('restoreDraft');
+      }
+    }
+  }, []);
 
   // Pre-fill a sample employee for demo when reaching step 2
   useEffect(() => {

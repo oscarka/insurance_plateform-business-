@@ -22,6 +22,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { getInterceptRules } from '../utils/api';
 
 const { TextArea } = Input;
 
@@ -56,27 +57,14 @@ const InterceptionRulesList: React.FC = () => {
   const fetchRules = async () => {
     setLoading(true);
     try {
-      // TODO: 替换为实际API调用
-      const mockData: InterceptionRule[] = [
-        {
-          rule_id: 1,
-          rule_name: '年龄限制规则',
-          rule_type: '年龄限制',
-          insurance_company_code: 'LIBO',
-          insurance_company_name: '利宝保险',
-          product_code: 'PRODUCT_A',
-          product_name: '雇主责任险A',
-          condition_type: '年龄',
-          condition_value: '18-65',
-          action: '拦截',
-          priority: 1,
-          status: '启用',
-          description: '被保人年龄必须在18-65岁之间',
-        },
-      ];
-      setRules(mockData);
-    } catch (error) {
-      message.error('获取拦截规则列表失败');
+      const response = await getInterceptRules();
+      // 确保返回的是数组
+      const rulesData = Array.isArray(response) ? response : (response.data || []);
+      setRules(rulesData);
+    } catch (error: any) {
+      console.error('获取拦截规则列表失败:', error);
+      message.error('获取拦截规则列表失败: ' + (error.message || '未知错误'));
+      setRules([]);
     } finally {
       setLoading(false);
     }

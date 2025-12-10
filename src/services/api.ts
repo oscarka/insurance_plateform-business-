@@ -269,6 +269,55 @@ export const getApplication = async (applicationId: number) => {
 };
 
 /**
+ * 保存投保单草稿（缓存）
+ */
+export const saveDraft = async (data: {
+  company_info: any;
+  product_id: number;
+  plans: any[];
+  employees: any[];
+  effective_date: string;
+  expiry_date: string;
+  common_duration: string;
+  selected_plan_ids: Record<string, number>;
+  premiums: Record<string, number>;
+}) => {
+  const result = await request('/applications/draft', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return result.data || result;
+};
+
+/**
+ * 获取草稿列表
+ */
+export const getDrafts = async (params?: { company_name?: string; credit_code?: string }) => {
+  const queryString = params ? `?${new URLSearchParams(params as any).toString()}` : '';
+  // request函数已经会自动提取data字段，所以直接返回即可
+  const result = await request(`/applications/drafts${queryString}`);
+  // 确保返回的是数组
+  return Array.isArray(result) ? result : [];
+};
+
+/**
+ * 获取草稿详情
+ */
+export const getDraft = async (draftId: number) => {
+  // request函数已经会自动提取data字段，所以直接返回即可
+  return await request(`/applications/drafts/${draftId}`);
+};
+
+/**
+ * 删除草稿
+ */
+export const deleteDraft = async (draftId: number) => {
+  return request(`/applications/drafts/${draftId}`, {
+    method: 'DELETE',
+  });
+};
+
+/**
  * 提交核保
  */
 export const submitUnderwriting = async (applicationId: number) => {

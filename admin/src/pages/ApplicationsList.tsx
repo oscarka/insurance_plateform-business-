@@ -13,6 +13,7 @@ import {
   Descriptions,
   message,
   Tooltip,
+  Pagination,
 } from 'antd';
 import {
   SearchOutlined,
@@ -22,21 +23,32 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import { getApplications, getApplication } from '../utils/api';
 
 const { RangePicker } = DatePicker;
 
 interface Application {
   application_id: number;
   application_no: string;
+  company_id: number;
   company_name: string;
+  credit_code?: string;
+  product_id: number;
   product_name: string;
+  product_code?: string;
   total_premium: number;
   insured_count: number;
   status: string;
   effective_date: string;
   expiry_date: string;
   created_at: string;
-  insurance_company: string;
+  updated_at: string;
+  insurance_company_code?: string;
+  insurance_company_name?: string;
+  insurance_company?: string; // 兼容旧字段名
+  submitted_at?: string;
+  underwritten_at?: string;
+  draft_data?: any; // 草稿数据
 }
 
 const ApplicationsList: React.FC = () => {
@@ -49,33 +61,53 @@ const ApplicationsList: React.FC = () => {
     status: '',
     dateRange: null as [dayjs.Dayjs, dayjs.Dayjs] | null,
   });
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 20,
+    total: 0,
+  });
 
   useEffect(() => {
     fetchApplications();
-  }, []);
+  }, [pagination.current, pagination.pageSize]);
 
   const fetchApplications = async () => {
     setLoading(true);
     try {
-      // TODO: 替换为实际API调用
-      const mockData: Application[] = [
-        {
-          application_id: 1,
-          application_no: 'APP20250101001',
-          company_name: '测试企业有限公司',
-          product_name: '雇主责任险A',
-          total_premium: 8100,
-          insured_count: 10,
-          status: '待核保',
-          effective_date: '2025-01-01',
-          expiry_date: '2026-01-01',
-          created_at: '2025-01-01 10:00:00',
-          insurance_company: '利宝保险',
-        },
-      ];
-      setApplications(mockData);
-    } catch (error) {
-      message.error('获取投保单列表失败');
+      const params: any = {
+        page: pagination.current,
+        page_size: pagination.pageSize,
+      };
+      
+      if (searchParams.keyword) {
+        params.keyword = searchParams.keyword;
+      }
+      if (searchParams.status) {
+        params.status = searchParams.status;
+      }
+      if (searchParams.dateRange && searchParams.dateRange[0] && searchParams.dateRange[1]) {
+        params.start_date = searchParams.dateRange[0].format('YYYY-MM-DD');
+        params.end_date = searchParams.dateRange[1].format('YYYY-MM-DD');
+      }
+      
+      const result = await getApplications(params);
+      
+      if (result.success && result.data) {
+        setApplications(result.data);
+        if (result.pagination) {
+          setPagination({
+            current: result.pagination.page,
+            pageSize: result.pagination.page_size,
+            total: result.pagination.total,
+          });
+        }
+      } else {
+        setApplications([]);
+      }
+    } catch (error: any) {
+      console.error('获取投保单列表失败:', error);
+      message.error('获取投保单列表失败: ' + (error.message || '未知错误'));
+      setApplications([]);
     } finally {
       setLoading(false);
     }
@@ -94,9 +126,29 @@ const ApplicationsList: React.FC = () => {
     fetchApplications();
   };
 
-  const handleViewDetail = (record: Application) => {
-    setSelectedApplication(record);
-    setDetailVisible(true);
+  const handleViewDetail = async (record: Application) => {
+    try {
+      const detail = await getApplication(record.application_id);
+      if (detail.success && detail.data) {
+        setSelectedApplication(detail.data);
+      } else {
+        setSelectedApplication(record);
+      }
+      setDetailVisible(true);
+    } catch (error: any) {
+      console.error('获取投保单详情失败:', error);
+      message.warning('获取详情失败，显示基本信息');
+      setSelectedApplication(record);
+      setDetailVisible(true);
+    }
+  };
+  
+  const handleTableChange = (page: number, pageSize: number) => {
+    setPagination({
+      ...pagination,
+      current: page,
+      pageSize: pageSize,
+    });
   };
 
   const getStatusTag = (status: string) => {
@@ -135,9 +187,10 @@ const ApplicationsList: React.FC = () => {
     },
     {
       title: '保司',
-      dataIndex: 'insurance_company',
-      key: 'insurance_company',
+      dataIndex: 'insurance_company_name',
+      key: 'insurance_company_name',
       width: 120,
+      render: (text) => text || '-',
     },
     {
       title: '总保费',
@@ -244,10 +297,13 @@ const ApplicationsList: React.FC = () => {
             rowKey="application_id"
             scroll={{ x: 1500 }}
             pagination={{
-              total: applications.length,
-              pageSize: 10,
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              total: pagination.total,
               showSizeChanger: true,
               showTotal: (total) => `共 ${total} 条`,
+              onChange: handleTableChange,
+              onShowSizeChange: handleTableChange,
             }}
           />
         </Space>
@@ -275,7 +331,7 @@ const ApplicationsList: React.FC = () => {
               {selectedApplication.product_name}
             </Descriptions.Item>
             <Descriptions.Item label="保司">
-              {selectedApplication.insurance_company}
+              {selectedApplication.insurance_company_name || selectedApplication.insurance_company_code || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="总保费">
               ¥{selectedApplication.total_premium.toLocaleString()}
@@ -284,14 +340,37 @@ const ApplicationsList: React.FC = () => {
               {selectedApplication.insured_count} 人
             </Descriptions.Item>
             <Descriptions.Item label="生效日期">
-              {selectedApplication.effective_date}
+              {selectedApplication.effective_date ? dayjs(selectedApplication.effective_date).format('YYYY-MM-DD') : '-'}
             </Descriptions.Item>
             <Descriptions.Item label="到期日期">
-              {selectedApplication.expiry_date}
+              {selectedApplication.expiry_date ? dayjs(selectedApplication.expiry_date).format('YYYY-MM-DD') : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="创建时间" span={2}>
-              {selectedApplication.created_at}
+            <Descriptions.Item label="创建时间">
+              {selectedApplication.created_at ? dayjs(selectedApplication.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
             </Descriptions.Item>
+            <Descriptions.Item label="更新时间">
+              {selectedApplication.updated_at ? dayjs(selectedApplication.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
+            </Descriptions.Item>
+            {selectedApplication.credit_code && (
+              <Descriptions.Item label="统一社会信用代码" span={2}>
+                {selectedApplication.credit_code}
+              </Descriptions.Item>
+            )}
+            {selectedApplication.product_code && (
+              <Descriptions.Item label="产品代码">
+                {selectedApplication.product_code}
+              </Descriptions.Item>
+            )}
+            {selectedApplication.submitted_at && (
+              <Descriptions.Item label="提交时间">
+                {dayjs(selectedApplication.submitted_at).format('YYYY-MM-DD HH:mm:ss')}
+              </Descriptions.Item>
+            )}
+            {selectedApplication.underwritten_at && (
+              <Descriptions.Item label="核保时间" span={2}>
+                {dayjs(selectedApplication.underwritten_at).format('YYYY-MM-DD HH:mm:ss')}
+              </Descriptions.Item>
+            )}
           </Descriptions>
         )}
       </Modal>

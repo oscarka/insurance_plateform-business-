@@ -73,7 +73,7 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
   useEffect(() => {
     fetchProducts();
   }, []);
-  
+
   // 校验企业所在地
   const validateRegion = (): boolean => {
     if (!companyInfo.provinceId || !companyInfo.province) {
@@ -212,8 +212,8 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
     // 更新selectedPlanIds
     setSelectedPlanIds((prev) => {
       const updated = {
-        ...prev,
-        [planInstanceId]: planId,
+      ...prev,
+      [planInstanceId]: planId,
       };
       console.log(`[前端] selectedPlanIds更新:`, prev, '->', updated);
       return updated;
@@ -265,15 +265,15 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
       
       // 更新方案配置
       const updatedPlans = plans.map((p) =>
-        p.id === planInstanceId
-          ? {
-              ...p,
-              name: plan.plan_name,
+          p.id === planInstanceId
+            ? {
+                ...p,
+                name: plan.plan_name,
               duration: commonDuration || defaultDuration, // 使用统一的保障期限
-              paymentType: plan.payment_type,
+                paymentType: plan.payment_type,
               liabilitySelections: defaultSelections, // 初始化默认责任选择
-            }
-          : p
+              }
+            : p
       );
       console.log(`[前端] 更新方案配置，新方案名称: ${plan.plan_name}`);
       setPlans(updatedPlans);
@@ -451,7 +451,7 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
       console.log(`[前端] result类型:`, typeof result);
       console.log(`[前端] result.data:`, result.data);
       console.log(`[前端] result.premium_per_person:`, result.premium_per_person);
-      
+
       // 处理固定保费和费率计算两种模式
       // request函数已经提取了data字段，所以result直接就是data对象
       const premiumPerPerson = result.premium_per_person || 0;
@@ -469,24 +469,37 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
       console.log(`[前端] 更新premiums，planInstanceId: ${planInstanceId}, 保费: ${premiumPerPerson}`);
       
       setPremiums((prev) => {
+        // 检查保费是否真的变化了，避免不必要的更新
+        if (prev[planInstanceId] === premiumPerPerson) {
+          console.log(`[前端] 方案 ${planInstanceId} 的保费未变化 (${premiumPerPerson})，跳过更新`);
+          return prev;
+        }
+        
         const updated = {
-          ...prev,
-          [planInstanceId]: premiumPerPerson,
+        ...prev,
+        [planInstanceId]: premiumPerPerson,
         };
         console.log(`[前端] premiums更新前:`, prev);
         console.log(`[前端] premiums更新后:`, updated);
         
-        // 同时更新plan中的保费信息
-        const plan = plans.find((p) => p.id === planInstanceId);
-        if (plan) {
-          const count = typeof plan.insuredCount === 'number' ? plan.insuredCount : 0;
-          const totalPremium = premiumPerPerson * count;
-          setPlans(plans.map((p) => 
-            p.id === planInstanceId 
-              ? { ...p, premiumPerPerson, totalPremium }
-              : p
-          ));
-        }
+        // 同时更新plan中的保费信息（使用函数式更新，避免依赖plans）
+        setPlans((currentPlans) => {
+          const plan = currentPlans.find((p) => p.id === planInstanceId);
+          if (plan) {
+            const count = typeof plan.insuredCount === 'number' ? plan.insuredCount : 0;
+            const totalPremium = premiumPerPerson * count;
+            // 检查是否真的需要更新
+            if (plan.premiumPerPerson === premiumPerPerson && plan.totalPremium === totalPremium) {
+              return currentPlans; // 没有变化，返回原数组
+            }
+            return currentPlans.map((p) => 
+              p.id === planInstanceId 
+                ? { ...p, premiumPerPerson, totalPremium }
+                : p
+            );
+          }
+          return currentPlans;
+        });
         
         return updated;
       });
@@ -499,8 +512,33 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
     }
   };
 
+  // 使用ref跟踪上一次的关键值，避免无限循环
+  const prevCalculationKeyRef = useRef<string>('');
+  
   // 自动重新计算保费：监听所有可能影响保费的因素变化
   useEffect(() => {
+    // 生成一个唯一的关键值，用于判断是否需要重新计算
+    const calculationKey = JSON.stringify({
+      plans: plans.map(p => ({
+        id: p.id,
+        insuredCount: p.insuredCount,
+        duration: p.duration,
+        jobClass: p.jobClass,
+        liabilitySelections: p.liabilitySelections,
+      })),
+      selectedPlanIds,
+      selectedProductId,
+      planLiabilitiesKeys: Object.keys(planLiabilities).sort(),
+    });
+    
+    // 如果关键值没有变化，跳过计算
+    if (calculationKey === prevCalculationKeyRef.current) {
+      console.log(`[前端] 关键值未变化，跳过保费计算`);
+      return;
+    }
+    
+    prevCalculationKeyRef.current = calculationKey;
+    
     console.log(`[前端] ========== 自动重新计算保费检查 ==========`);
     console.log(`[前端] plans数量: ${plans.length}`);
     console.log(`[前端] selectedPlanIds:`, selectedPlanIds);
@@ -590,11 +628,23 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
       timers.forEach(timer => clearTimeout(timer));
     };
   }, [
-    plans,
-    selectedPlanIds,
+    // 使用更细粒度的依赖，避免plans对象引用变化导致无限循环
+    // 只依赖影响保费计算的关键字段，不依赖整个plans对象
+    plans.length,
+    // 使用JSON.stringify来比较plans的关键字段，但只比较影响保费的部分
+    JSON.stringify(plans.map(p => ({
+      id: p.id,
+      insuredCount: p.insuredCount,
+      duration: p.duration,
+      jobClass: p.jobClass,
+      liabilitySelections: p.liabilitySelections,
+      // 不包含premiumPerPerson和totalPremium，避免循环
+    }))),
+    JSON.stringify(selectedPlanIds),
     selectedProductId,
-    planLiabilities,
+    JSON.stringify(Object.keys(planLiabilities).sort()), // 只依赖planLiabilities的keys
     // 注意：不包含 handleCalculatePremium，使用 useCallback 或直接在 useEffect 内定义
+    // 注意：不包含premiums，因为premiums的更新不应该触发重新计算
   ]);
 
   const handleUpdatePlan = (id: string, field: keyof PlanConfig, value: any) => {
@@ -733,39 +783,39 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                       配置项
                     </th>
                     {plans.map((plan, index) => {
-                      const planId = selectedPlanIds[plan.id];
-                      return (
+                const planId = selectedPlanIds[plan.id];
+                return (
                         <th key={plan.id} className="border border-gray-300 bg-gray-50 px-4 py-3 text-center text-sm font-semibold text-gray-700 relative min-w-[200px]">
                           <div className="flex flex-col items-center gap-2">
                             <div className="flex items-center gap-2">
-                              <select
+                        <select
                                 className="border border-gray-300 rounded px-2 py-1 text-xs"
-                                value={planId || ''}
+                          value={planId || ''}
                                 onChange={(e) => {
                                   const newPlanId = Number(e.target.value);
                                   console.log(`[前端] 方案下拉框变化: planInstanceId=${plan.id}, 旧planId=${planId}, 新planId=${newPlanId}`);
                                   handleSelectPlan(plan.id, newPlanId);
                                 }}
-                              >
-                                <option value="">请选择方案</option>
-                                {availablePlans.map((p) => (
-                                  <option key={p.plan_id} value={p.plan_id}>
-                                    {p.plan_name}
-                                  </option>
-                                ))}
-                              </select>
-                              {plans.length > 1 && (
-                                <button
-                                  onClick={() => handleRemovePlan(plan.id)}
+                        >
+                          <option value="">请选择方案</option>
+                          {availablePlans.map((p) => (
+                            <option key={p.plan_id} value={p.plan_id}>
+                              {p.plan_name}
+                            </option>
+                          ))}
+                        </select>
+                        {plans.length > 1 && (
+                          <button
+                            onClick={() => handleRemovePlan(plan.id)}
                                   className="text-red-500 text-sm hover:text-red-700"
                                   title="删除方案"
-                                >
+                          >
                                   ×
-                                </button>
-                              )}
-                            </div>
+                          </button>
+                        )}
+                      </div>
                             <span className="text-xs text-gray-500">{plan.name}</span>
-                          </div>
+                    </div>
                         </th>
                       );
                     })}
@@ -774,74 +824,74 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                 <tbody>
                   {plans.length > 0 && (
                     <>
-                      {/* 投保类型 */}
+                        {/* 投保类型 */}
                       <tr>
                         <td className="border border-gray-300 px-4 py-2 text-sm text-gray-600 bg-gray-50">
                           投保类型
                         </td>
                         {plans.map((plan) => (
                           <td key={plan.id} className="border border-gray-300 px-4 py-2">
-                            <input
-                              type="text"
+                          <input
+                            type="text"
                               className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
-                              value="新保"
-                              disabled
-                              readOnly
-                            />
+                            value="新保"
+                            disabled
+                            readOnly
+                          />
                           </td>
                         ))}
                       </tr>
 
-                      {/* 是否涉高 */}
+                        {/* 是否涉高 */}
                       <tr>
                         <td className="border border-gray-300 px-4 py-2 text-sm text-gray-600 bg-gray-50">
                           是否涉高
                         </td>
                         {plans.map((plan) => (
                           <td key={plan.id} className="border border-gray-300 px-4 py-2">
-                            <select
+                          <select
                               className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                              value={plan.isHighRisk ? '是' : '否'}
+                            value={plan.isHighRisk ? '是' : '否'}
                               onChange={(e) => {
                                 const newValue = e.target.value === '是';
                                 console.log(`[前端] 是否涉高变化: 方案 ${plan.id}, 新值: ${newValue}`);
                                 handleUpdatePlan(plan.id, 'isHighRisk', newValue);
                                 // 是否涉高变化会触发 useEffect 自动重新计算保费
                               }}
-                            >
-                              <option value="否">否</option>
-                              <option value="是">是</option>
-                            </select>
+                          >
+                            <option value="否">否</option>
+                            <option value="是">是</option>
+                          </select>
                           </td>
                         ))}
                       </tr>
 
-                      {/* 职业类别 */}
+                        {/* 职业类别 */}
                       <tr>
                         <td className="border border-gray-300 px-4 py-2 text-sm text-gray-600 bg-gray-50">
                           职业类别
                         </td>
                         {plans.map((plan) => (
                           <td key={plan.id} className="border border-gray-300 px-4 py-2">
-                            <select
+                          <select
                               className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                              value={plan.jobClass}
+                            value={plan.jobClass}
                               onChange={(e) => {
                                 const newValue = e.target.value;
                                 console.log(`[前端] 职业类别变化: 方案 ${plan.id}, 新值: ${newValue}`);
                                 handleUpdatePlan(plan.id, 'jobClass', newValue);
                                 // 职业类别变化会触发 useEffect 自动重新计算保费
                               }}
-                            >
-                              <option value="1~3类">1~3类</option>
-                              <option value="4类">4类</option>
-                              <option value="5类">5类</option>
-                            </select>
+                          >
+                            <option value="1~3类">1~3类</option>
+                            <option value="4类">4类</option>
+                            <option value="5类">5类</option>
+                          </select>
                           </td>
                         ))}
                       </tr>
 
-                      {/* 保障时间 */}
+                        {/* 保障时间 */}
                       <tr>
                         <td className="border border-gray-300 px-4 py-2 text-sm text-gray-600 bg-gray-50">
                           保障时间
@@ -850,7 +900,7 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                           const planId = selectedPlanIds[plan.id];
                           return (
                             <td key={plan.id} className="border border-gray-300 px-4 py-2">
-                              <select
+                          <select
                                 className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
                                 value={commonDuration}
                                 onChange={async (e) => {
@@ -876,19 +926,19 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                                   });
                                   setPlans(updatedPlans);
                                 }}
-                              >
+                          >
                                 {planId ? (
                                   availablePlans
-                                    .find((p) => p.plan_id === planId)
-                                    ?.duration_options.map((option) => (
-                                      <option key={option} value={option}>
-                                        {option}
-                                      </option>
+                              .find((p) => p.plan_id === planId)
+                              ?.duration_options.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
                                     ))
                                 ) : (
                                   <option value="1年">1年</option>
                                 )}
-                              </select>
+                          </select>
                             </td>
                           );
                         })}
@@ -935,7 +985,7 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                         return sortedLiabilities.map((liability) => (
                           <tr key={liability.liability_id}>
                             <td className="border border-gray-300 px-4 py-2 text-sm text-gray-600 bg-gray-50">
-                              {liability.liability_name}
+                                {liability.liability_name}
                               {liability.is_required && <span className="text-red-500 ml-1">*</span>}
                             </td>
                             {plans.map((plan) => {
@@ -951,10 +1001,10 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                                 <td key={plan.id} className="border border-gray-300 px-4 py-2">
                                   {planId && planLiability ? (
                                     <div className="flex items-center gap-1">
-                                      <select
+                              <select
                                         className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
                                         value={currentValue}
-                                        onChange={(e) => {
+                                onChange={(e) => {
                                           const newValue = e.target.value;
                                           console.log(`[前端] 责任选择变化: 方案 ${plan.id}, 责任 ${liability.liability_id}, 新值: ${newValue}`);
                                           const newSelections = {
@@ -963,24 +1013,24 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                                           };
                                           handleUpdatePlan(plan.id, 'liabilitySelections', newSelections);
                                           // 责任选择变化会触发 useEffect 自动重新计算保费
-                                        }}
-                                      >
-                                        <option value="">请选择</option>
+                                }}
+                              >
+                                <option value="">请选择</option>
                                         {planLiability.coverage_options.map((option) => (
-                                          <option key={option} value={option}>
-                                            {option}
-                                          </option>
-                                        ))}
-                                      </select>
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
                                       {planLiability.unit && (
                                         <span className="text-xs text-gray-500 whitespace-nowrap">{planLiability.unit}</span>
                                       )}
-                                    </div>
+                            </div>
                                   ) : planId ? (
                                     <span className="text-gray-400 text-xs">加载中...</span>
-                                  ) : (
+                        ) : (
                                     <span className="text-gray-400 text-xs">-</span>
-                                  )}
+                        )}
                                 </td>
                               );
                             })}
@@ -988,34 +1038,34 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                         ));
                       })()}
 
-                      {/* 投保人数 */}
+                        {/* 投保人数 */}
                       <tr>
                         <td className="border border-gray-300 px-4 py-2 text-sm text-gray-600 bg-gray-50">
                           投保人数
                         </td>
                         {plans.map((plan) => (
                           <td key={plan.id} className="border border-gray-300 px-4 py-2">
-                            <input
-                              type="number"
+                          <input
+                            type="number"
                               className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-                              value={plan.insuredCount}
+                            value={plan.insuredCount}
                               onChange={(e) => {
                                 const newValue = e.target.value === '' ? '' : parseInt(e.target.value);
                                 console.log(`[前端] 投保人数变化: 方案 ${plan.id}, 旧值: ${plan.insuredCount}, 新值: ${newValue}`);
-                                handleUpdatePlan(
-                                  plan.id,
-                                  'insuredCount',
+                              handleUpdatePlan(
+                                plan.id,
+                                'insuredCount',
                                   newValue
                                 );
                                 // 投保人数变化会触发 useEffect 自动重新计算保费
                               }}
                               placeholder="请填写投保人数"
-                            />
+                          />
                           </td>
                         ))}
                       </tr>
 
-                      {/* 每人保费 */}
+                        {/* 每人保费 */}
                       <tr>
                         <td className="border border-gray-300 px-4 py-2 text-sm text-gray-600 bg-gray-50">
                           每人保费
@@ -1032,17 +1082,17 @@ const PlanSelectionDynamic: React.FC<PlanSelectionDynamicProps> = ({
                                     </span>
                                     <span className="text-xs text-gray-500">
                                       (保障期限: {plan.duration})
-                                    </span>
-                                  </div>
+                            </span>
+                          </div>
                                 ) : (
                                   <span className="text-gray-400 text-sm">计算中...</span>
                                 )
                               ) : (
                                 <span className="text-gray-400 text-xs">-</span>
-                              )}
+                        )}
                             </td>
-                          );
-                        })}
+                );
+              })}
                       </tr>
                     </>
                   )}

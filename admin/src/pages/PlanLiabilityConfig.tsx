@@ -61,11 +61,11 @@ const PlanLiabilityConfig: React.FC = () => {
       if (!planId) return;
       const response = await getPlan(planId);
       if (response.success && response.data) {
-        setPlanInfo({
+      setPlanInfo({
           plan_name: response.data.plan_name,
           product_name: response.data.product_name,
           company_name: response.data.company_name,
-        });
+      });
       }
     } catch (error: any) {
       console.error('获取方案信息失败:', error);

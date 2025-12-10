@@ -163,5 +163,65 @@ export const getRates = async (params?: { product_id?: string | number; plan_id?
   return response.data || response;
 };
 
+// ============================================
+// 投保单相关API
+// ============================================
+
+/**
+ * 获取投保单列表
+ */
+export const getApplications = async (params?: {
+  keyword?: string;
+  status?: string;
+  company_name?: string;
+  product_id?: string | number;
+  start_date?: string;
+  end_date?: string;
+  page?: number;
+  page_size?: number;
+}) => {
+  const queryParams = new URLSearchParams();
+  if (params?.keyword) queryParams.append('keyword', params.keyword);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.company_name) queryParams.append('company_name', params.company_name);
+  if (params?.product_id) queryParams.append('product_id', String(params.product_id));
+  if (params?.start_date) queryParams.append('start_date', params.start_date);
+  if (params?.end_date) queryParams.append('end_date', params.end_date);
+  if (params?.page) queryParams.append('page', String(params.page));
+  if (params?.page_size) queryParams.append('page_size', String(params.page_size));
+  
+  const queryString = queryParams.toString();
+  const response = await api.get(`/applications${queryString ? `?${queryString}` : ''}`);
+  // 后端返回格式: { success: true, data: [...], pagination: {...} }
+  if (response.success && response.data) {
+    return {
+      success: true,
+      data: response.data,
+      pagination: response.pagination,
+    };
+  }
+  return response;
+};
+
+/**
+ * 获取投保单详情
+ */
+export const getApplication = async (applicationId: number) => {
+  const response = await api.get(`/applications/${applicationId}`);
+  return response.data || response;
+};
+
+// ============================================
+// 拦截规则相关API
+// ============================================
+
+/**
+ * 获取拦截规则列表
+ */
+export const getInterceptRules = async () => {
+  const response = await api.get('/products/intercept-rules/list');
+  return response.data || response;
+};
+
 export default api;
 
