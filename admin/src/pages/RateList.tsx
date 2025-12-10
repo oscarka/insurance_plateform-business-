@@ -154,7 +154,7 @@ const RateList: React.FC = () => {
     {
       title: '操作',
       width: 150,
-      render: (_, record) => (
+      render: (_, _record) => (
         <Button 
           type="link" 
           onClick={() => {

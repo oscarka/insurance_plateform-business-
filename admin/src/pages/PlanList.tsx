@@ -9,17 +9,13 @@ import {
   Space,
   Tag,
   message,
-  Popconfirm,
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-
-const { Search } = Input;
 
 interface Plan {
   plan_id: number;

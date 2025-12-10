@@ -141,7 +141,7 @@ const PlanLiabilityConfig: React.FC = () => {
 
   const handleSubmit = async (values: any) => {
     try {
-      const data = {
+      const submitData = {
         ...values,
         coverage_options: values.coverage_options_string
           .split(',')
@@ -151,10 +151,11 @@ const PlanLiabilityConfig: React.FC = () => {
       
       // TODO: 调用API保存
       // if (editingRecord?.id) {
-      //   await api.updatePlanLiability(editingRecord.id, data);
+      //   await api.updatePlanLiability(editingRecord.id, submitData);
       // } else {
-      //   await api.createPlanLiability(planId, data);
+      //   await api.createPlanLiability(planId, submitData);
       // }
+      console.log('提交数据:', submitData); // 临时使用，避免未使用变量警告
       
       message.success(editingRecord ? '更新成功' : '创建成功');
       setModalVisible(false);

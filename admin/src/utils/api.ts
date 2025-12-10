@@ -22,6 +22,7 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   (response) => {
+    // 返回response.data，因为后端统一返回 {success, data, ...} 格式
     return response.data;
   },
   (error) => {
@@ -191,9 +192,10 @@ export const getApplications = async (params?: {
   if (params?.page_size) queryParams.append('page_size', String(params.page_size));
   
   const queryString = queryParams.toString();
-  const response = await api.get(`/applications${queryString ? `?${queryString}` : ''}`);
+  const response: any = await api.get(`/applications${queryString ? `?${queryString}` : ''}`);
   // 后端返回格式: { success: true, data: [...], pagination: {...} }
-  if (response.success && response.data) {
+  // axios拦截器已经提取了response.data，所以response就是后端返回的数据
+  if (response && response.success && response.data) {
     return {
       success: true,
       data: response.data,

@@ -76,20 +76,21 @@ const Statistics: React.FC = () => {
     }
   };
 
-  const chartConfig = {
-    data: statData.monthlyData,
-    xField: 'month',
-    yField: 'applications',
-    point: {
-      size: 5,
-      shape: 'diamond',
-    },
-    label: {
-      style: {
-        fill: '#AAA',
-      },
-    },
-  };
+  // chartConfig 暂时未使用，保留以备将来使用图表组件
+  // const chartConfig = {
+  //   data: statData.monthlyData,
+  //   xField: 'month',
+  //   yField: 'applications',
+  //   point: {
+  //     size: 5,
+  //     shape: 'diamond',
+  //   },
+  //   label: {
+  //     style: {
+  //       fill: '#AAA',
+  //     },
+  //   },
+  // };
 
   const productColumns = [
     {

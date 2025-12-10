@@ -9,7 +9,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (_values: any) => {
     setLoading(true);
     try {
       // TODO: 调用登录API
