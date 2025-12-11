@@ -1,0 +1,37 @@
+# Railway 配置文件
+# 用于自动配置部署设置和环境变量
+# 文档：https://docs.railway.app/reference/railway-toml
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "node server.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# 环境变量配置
+# Railway会自动注入MySQL服务的变量，使用 ${{MySQL.VARIABLE_NAME}} 格式引用
+# 注意：在Railway界面中创建MySQL服务后，这些变量会自动注入
+[env]
+# 数据库配置 - Railway会自动从MySQL服务注入
+# 如果MySQL服务名称不是"MySQL"，需要修改为实际的服务名称
+DB_HOST = "${{MySQL.MYSQLHOST}}"
+DB_PORT = "3306"
+DB_USER = "${{MySQL.MYSQLUSER}}"
+DB_PASSWORD = "${{MySQL.MYSQLPASSWORD}}"
+DB_NAME = "${{MySQL.MYSQLDATABASE}}"
+
+# 服务器配置
+PORT = "3000"
+NODE_ENV = "production"
+
+# CORS配置 - 需要根据实际的前端域名更新
+# 格式：多个域名用逗号分隔，不要有空格
+ALLOWED_ORIGINS = "https://insurance-plateform-business.pages.dev,https://your-user-frontend.pages.dev"
+
+# 使用说明：
+# 1. 在Railway中创建MySQL服务后，Railway会自动提供MySQL相关的环境变量
+# 2. ALLOWED_ORIGINS 需要根据实际的前端部署域名更新（替换 your-user-frontend.pages.dev）
+# 3. 如果前端域名有变化，更新此文件并重新部署即可
+# 4. Railway会自动读取此文件并应用配置
