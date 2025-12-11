@@ -20,7 +20,7 @@ DB_HOST = "${{MySQL.MYSQLHOST}}"
 DB_PORT = "3306"
 DB_USER = "${{MySQL.MYSQLUSER}}"
 DB_PASSWORD = "${{MySQL.MYSQLPASSWORD}}"
-DB_NAME = "insurance_platform"
+DB_NAME = "${{MySQL.MYSQLDATABASE}}"
 
 # 服务器配置
 # 注意：PORT 不需要手动设置，Railway 会自动分配并设置 PORT 环境变量
