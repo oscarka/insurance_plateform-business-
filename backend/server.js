@@ -100,10 +100,10 @@ const startServer = async () => {
     console.log('提示：请确保数据库已创建，并检查 .env 文件配置');
   }
 
-  app.listen(PORT, () => {
-    console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
-    console.log(`📝 API文档: http://localhost:${PORT}/api`);
-    console.log(`💚 健康检查: http://localhost:${PORT}/health`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 服务器运行在 http://0.0.0.0:${PORT}`);
+    console.log(`📝 API文档: http://0.0.0.0:${PORT}/api`);
+    console.log(`💚 健康检查: http://0.0.0.0:${PORT}/health`);
   });
 };
 
