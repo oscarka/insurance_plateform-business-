@@ -1,12 +1,11 @@
 -- ============================================
 -- 保险经纪公司业务平台数据库结构
--- 数据库：insurance_platform
+-- 数据库：railway（Railway MySQL 默认数据库）
 -- 字符集：utf8mb4
 -- ============================================
 
--- 创建数据库
-CREATE DATABASE IF NOT EXISTS `insurance_platform` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `insurance_platform`;
+-- 使用 railway 数据库（Railway MySQL 默认数据库）
+USE `railway`;
 
 -- ============================================
 -- 一、核心业务表
