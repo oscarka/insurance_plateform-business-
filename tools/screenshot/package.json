@@ -1,0 +1,12 @@
+{
+  "name": "screenshot-tool",
+  "version": "1.0.0",
+  "description": "系统页面自动截图工具",
+  "main": "screenshot-pages.cjs",
+  "scripts": {
+    "screenshot": "node screenshot-pages.cjs"
+  },
+  "dependencies": {
+    "puppeteer": "^23.0.0"
+  }
+}

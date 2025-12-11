@@ -1,0 +1,4 @@
+# 忽略所有截图文件（如果不想提交到git）
+*.png
+*.json
+!README.md
