@@ -1,6 +1,7 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { existsSync, copyFileSync } from 'fs';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -16,7 +17,6 @@ export default defineConfig(({ mode }) => {
           name: 'copy-redirects',
           closeBundle() {
             try {
-              const { existsSync, copyFileSync } = require('fs');
               const distPath = path.resolve(__dirname, 'dist');
               const redirectsPath = path.resolve(__dirname, '_redirects');
               if (existsSync(redirectsPath) && existsSync(distPath)) {

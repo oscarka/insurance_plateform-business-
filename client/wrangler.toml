@@ -1,6 +1,6 @@
-name = "insurance-plateform-adminsys"
+name = "insurance-platform-client"
 compatibility_date = "2024-12-10"
 
 # 指定构建输出目录
 # Cloudflare Pages 会自动读取此配置
-pages_build_output_dir = "./admin/dist"
+pages_build_output_dir = "./dist"
