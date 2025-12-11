@@ -20,10 +20,12 @@ DB_HOST = "${{MySQL.MYSQLHOST}}"
 DB_PORT = "3306"
 DB_USER = "${{MySQL.MYSQLUSER}}"
 DB_PASSWORD = "${{MySQL.MYSQLPASSWORD}}"
-DB_NAME = "${{MySQL.MYSQLDATABASE}}"
+DB_NAME = "insurance_platform"
 
 # 服务器配置
-PORT = "3000"
+# 注意：PORT 不需要手动设置，Railway 会自动分配并设置 PORT 环境变量
+# 代码中使用 process.env.PORT || 3000，会优先使用 Railway 提供的端口
+# PORT = "3000"  # 可选：作为默认值，但 Railway 会自动覆盖
 NODE_ENV = "production"
 
 # CORS配置 - 需要根据实际的前端域名更新
@@ -35,3 +37,4 @@ ALLOWED_ORIGINS = "https://insurance-plateform-business.pages.dev,https://your-u
 # 2. ALLOWED_ORIGINS 需要根据实际的前端部署域名更新（替换 your-user-frontend.pages.dev）
 # 3. 如果前端域名有变化，更新此文件并重新部署即可
 # 4. Railway会自动读取此文件并应用配置
+
