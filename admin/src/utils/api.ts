@@ -1,9 +1,44 @@
 import axios from 'axios';
 
+// 获取API基础URL，优先使用环境变量
+const getApiBaseURL = () => {
+  // 在构建时，Vite会将环境变量注入到import.meta.env中
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  
+  // 调试信息（仅在开发环境或浏览器控制台显示）
+  if (typeof window !== 'undefined') {
+    console.log('[API配置] 环境变量 VITE_API_BASE_URL:', envUrl);
+    console.log('[API配置] import.meta.env:', import.meta.env);
+  }
+  
+  // 开发环境或环境变量未设置时，使用默认值
+  if (!envUrl || envUrl === '' || envUrl === undefined) {
+    const defaultUrl = 'http://localhost:8888/api';
+    if (typeof window !== 'undefined') {
+      console.warn('[API配置] 环境变量未设置，使用默认值:', defaultUrl);
+    }
+    return defaultUrl;
+  }
+  
+  if (typeof window !== 'undefined') {
+    console.log('[API配置] 使用环境变量:', envUrl);
+  }
+  
+  return envUrl;
+};
+
+const apiBaseURL = getApiBaseURL();
+
 const api = axios.create({
-  baseURL: import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8888/api',
+  baseURL: apiBaseURL,
   timeout: 30000,
 });
+
+// 导出baseURL以便调试
+if (typeof window !== 'undefined') {
+  (window as any).__API_BASE_URL__ = apiBaseURL;
+  console.log('[API配置] 最终使用的API地址:', apiBaseURL);
+}
 
 // 请求拦截器
 api.interceptors.request.use(
